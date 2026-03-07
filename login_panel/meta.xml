@@ -1,0 +1,6 @@
+<meta>
+    <info author="codex" name="Login Panel" type="script" version="1.0.0" />
+
+    <script src="server.lua" type="server" />
+    <script src="client.lua" type="client" />
+</meta>
