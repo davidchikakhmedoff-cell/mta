@@ -1,0 +1,35 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: sms_reseller
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sms_reseller
+      JWT_SECRET: change-me
+      PAYMENT_WEBHOOK_SECRET: payment-secret
+    depends_on:
+      - postgres
+    ports:
+      - '4000:4000'
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:
