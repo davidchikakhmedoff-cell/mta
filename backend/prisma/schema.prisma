@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  blocked
+}
+
+enum TransactionType {
+  deposit
+  purchase
+  refund
+  withdraw
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  failed
+}
+
+enum OrderStatus {
+  pending
+  active
+  received
+  cancelled
+  expired
+}
+
+enum ProviderStatus {
+  enabled
+  disabled
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  balance      Decimal       @default(0.00) @db.Decimal(12, 2)
+  status       UserStatus    @default(active)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  orders       Order[]
+  transactions Transaction[]
+
+  @@map("users")
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  providerId String      @map("provider_id")
+  service    String
+  country    String
+  number     String
+  partnerRef String      @map("partner_ref")
+  price      Decimal     @db.Decimal(12, 2)
+  status     OrderStatus @default(pending)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  sms        Sms[]
+  user       User        @relation(fields: [userId], references: [id])
+  provider   Provider    @relation(fields: [providerId], references: [id])
+
+  @@map("orders")
+}
+
+model Sms {
+  id         String   @id @default(uuid())
+  orderId    String   @map("order_id")
+  message    String
+  receivedAt DateTime @default(now()) @map("received_at")
+  order      Order    @relation(fields: [orderId], references: [id])
+
+  @@map("sms")
+}
+
+model Provider {
+  id        String         @id @default(uuid())
+  name      String
+  apiUrl    String         @map("api_url")
+  apiKey    String         @map("api_key")
+  status    ProviderStatus @default(enabled)
+  priority  Int            @default(1)
+  createdAt DateTime       @default(now()) @map("created_at")
+  orders    Order[]
+
+  @@map("providers")
+}
+
+model Transaction {
+  id        String            @id @default(uuid())
+  userId    String            @map("user_id")
+  amount    Decimal           @db.Decimal(12, 2)
+  type      TransactionType
+  status    TransactionStatus @default(completed)
+  createdAt DateTime          @default(now()) @map("created_at")
+  user      User              @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
