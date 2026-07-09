@@ -17,9 +17,19 @@ local function now()
     return getRealTime().timestamp
 end
 
-local function query(sql, ...)
+function AuthDBQuery(sql, ...)
+    if not db then return {} end
     local handle = dbQuery(db, sql, ...)
     return dbPoll(handle, -1) or {}
+end
+
+function AuthDBExec(sql, ...)
+    if not db then return false end
+    return dbExec(db, sql, ...)
+end
+
+local function query(sql, ...)
+    return AuthDBQuery(sql, ...)
 end
 
 local function queryOne(sql, ...)
@@ -69,6 +79,9 @@ local function initDatabase()
     addColumn("skin", "INTEGER DEFAULT 0")
     addColumn("weapons", "TEXT")
     addColumn("has_position", "INTEGER DEFAULT 0")
+    addColumn("rp_name", "TEXT")
+    addColumn("level", "INTEGER DEFAULT 1")
+    addColumn("experience", "INTEGER DEFAULT 0")
     return true
 end
 
@@ -223,21 +236,25 @@ addEventHandler("auth:login", root, function(login, password, remember)
     setElementData(client, "auth:loggedIn", true, false)
     setElementData(client, "auth:login", login, false)
     setElementData(client, "auth:playerId", row.id, false)
+    setElementData(client, "rp:name", row.rp_name, true)
+    setElementData(client, "rp:level", tonumber(row.level) or 1, true)
+    setElementData(client, "rp:experience", tonumber(row.experience) or 0, true)
     pendingSpawns[client] = row
     triggerClientEvent(client, "auth:response", resourceRoot, true, "Добро пожаловать!", remember and login or false)
 end)
 
 addEvent("auth:register", true)
-addEventHandler("auth:register", root, function(login, password, repeatPassword, remember)
+addEventHandler("auth:register", root, function(login, password, repeatPassword, remember, rpName)
     if client ~= source then return end
     if not db then triggerClientEvent(client, "auth:response", resourceRoot, false, "База данных недоступна."); return end
     if not validLogin(login) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Логин: 3-24 символа, латиница, цифры и _."); return end
     if not validPassword(password) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Пароль должен быть от 6 до 32 символов."); return end
     if password ~= repeatPassword then triggerClientEvent(client, "auth:response", resourceRoot, false, "Пароли не совпадают."); return end
+    if not isValidRPNickname(rpName) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Введите RP-ник в формате Name Surname."); return end
     if queryOne("SELECT id FROM players WHERE login = ? LIMIT 1", login) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Такой аккаунт уже существует"); return end
 
     local serial, stamp = getPlayerSerial(client), now()
-    local ok = dbExec(db, "INSERT INTO players (login, password, serial, created_at, last_login, skin) VALUES (?, ?, ?, ?, ?, ?)", login, passwordHash(password, serial), serial, stamp, stamp, AuthConfig.spawn.skin)
+    local ok = dbExec(db, "INSERT INTO players (login, password, serial, created_at, last_login, skin, rp_name, level, experience) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", login, passwordHash(password, serial), serial, stamp, stamp, AuthConfig.spawn.skin, rpName, 1, 0)
     if not ok then triggerClientEvent(client, "auth:response", resourceRoot, false, "Не удалось создать аккаунт."); return end
 
     local account = getAccount(login)
@@ -277,6 +294,8 @@ addEventHandler("auth:spawnReady", root, function()
     if not row or not getPlayerId(client) or not isMtaLoggedIn(client) then return end
 
     pendingSpawns[client] = nil
+    if row.rp_name then setPlayerRPNickname(client, row.rp_name) end
+    triggerEvent("rp:onPlayerReady", root, client, row)
     spawnAuthorizedPlayer(client, row)
     triggerClientEvent(client, "auth:spawned", resourceRoot)
 end)

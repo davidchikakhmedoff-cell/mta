@@ -6,6 +6,7 @@ AuthUI = {
     targetAlpha = 0,
     remember = false,
     notice = nil,
+    helpVisible = false,
     hitboxes = {}
 }
 
@@ -13,6 +14,7 @@ function AuthUI.init()
     AuthUI.login = DXInput:new("Логин", false, AuthConfig.input.loginMax)
     AuthUI.password = DXInput:new("Пароль", true, AuthConfig.input.passwordMax)
     AuthUI.repeatPassword = DXInput:new("Повторите пароль", true, AuthConfig.input.passwordMax)
+    AuthUI.rpName = DXInput:new("RP-ник: Name Surname", false, 32)
     AuthUI.submit = DXButton:new("Войти", AuthUI.submitForm)
 
     local saved = loadRememberedLogin()
@@ -45,7 +47,7 @@ local function buildLayout()
     local screenW, screenH = guiGetScreenSize()
     local s = DXUtils.s
     local width = s(AuthConfig.design.panelWidth)
-    local height = s(AuthConfig.design.panelHeight + (AuthUI.mode == "register" and 78 or 0))
+    local height = s(AuthConfig.design.panelHeight + (AuthUI.mode == "register" and 148 or 0))
     local x, y = (screenW - width) / 2, (screenH - height) / 2
     local pad = s(38)
     local inputW, inputH = width - pad * 2, s(56)
@@ -62,6 +64,10 @@ local function buildLayout()
     if AuthUI.mode == "register" then
         cy = cy + s(70)
         boxes.repeatPassword = { x = x + pad, y = cy, w = inputW, h = inputH }
+        cy = cy + s(70)
+        boxes.rpName = { x = x + pad, y = cy, w = inputW, h = inputH }
+        cy = cy + s(46)
+        boxes.rpHelp = { x = x + pad, y = cy, w = inputW, h = s(24) }
     end
 
     cy = cy + s(70)
@@ -133,6 +139,7 @@ function AuthUI.validate()
     local login = AuthUI.login:getText()
     local password = AuthUI.password:getText()
     local repeatPassword = AuthUI.repeatPassword:getText()
+    local rpName = AuthUI.rpName:getText()
 
     if not login:match("^[A-Za-z0-9_]+$") or #login < AuthConfig.input.loginMin or #login > AuthConfig.input.loginMax then
         return false, "Логин: 3-24 символа, латиница, цифры и _."
@@ -142,6 +149,9 @@ function AuthUI.validate()
     end
     if AuthUI.mode == "register" and password ~= repeatPassword then
         return false, "Пароли не совпадают."
+    end
+    if AuthUI.mode == "register" and not rpName:match("^[A-Z][a-z]+ [A-Z][a-z]+$") then
+        return false, "RP-ник должен быть в формате Name Surname."
     end
     return true
 end
@@ -157,7 +167,7 @@ function AuthUI.submitForm()
     if AuthUI.mode == "login" then
         triggerServerEvent("auth:login", localPlayer, AuthUI.login:getText(), AuthUI.password:getText(), AuthUI.remember)
     else
-        triggerServerEvent("auth:register", localPlayer, AuthUI.login:getText(), AuthUI.password:getText(), AuthUI.repeatPassword:getText(), AuthUI.remember)
+        triggerServerEvent("auth:register", localPlayer, AuthUI.login:getText(), AuthUI.password:getText(), AuthUI.repeatPassword:getText(), AuthUI.remember, AuthUI.rpName:getText())
     end
 end
 
@@ -190,6 +200,9 @@ function AuthUI.render()
     AuthUI.password:draw(boxes.password.x, boxes.password.y, boxes.password.w, boxes.password.h, alpha, "🔒")
     if AuthUI.mode == "register" then
         AuthUI.repeatPassword:draw(boxes.repeatPassword.x, boxes.repeatPassword.y, boxes.repeatPassword.w, boxes.repeatPassword.h, alpha, "✓")
+        AuthUI.rpName:draw(boxes.rpName.x, boxes.rpName.y, boxes.rpName.w, boxes.rpName.h, alpha, "RP")
+        local helpColor = DXUtils.inBox(boxes.rpHelp.x, boxes.rpHelp.y, boxes.rpHelp.w, boxes.rpHelp.h) and tocolor(120, 215, 255, alpha) or DXUtils.color(AuthConfig.colors.primary, alpha)
+        dxDrawText("Как должен быть ник?", boxes.rpHelp.x, boxes.rpHelp.y, boxes.rpHelp.x + boxes.rpHelp.w, boxes.rpHelp.y + boxes.rpHelp.h, helpColor, 1, "default-bold", "center", "center")
     end
 
     local remember = boxes.remember
@@ -218,6 +231,19 @@ function AuthUI.render()
     dxDrawText(lead, lineX, lineY, lineX + leadWidth, lineY + s(24), DXUtils.color(AuthConfig.colors.muted, alpha), 1, "default", "left", "center")
     dxDrawText(link, boxes.switch.x, lineY, boxes.switch.x + linkWidth, lineY + s(24), linkColor, 1, "default-bold", "left", "center")
 
+    if AuthUI.helpVisible then
+        local hw, hh = s(520), s(300)
+        local hx, hy = (screenW - hw) / 2, (screenH - hh) / 2
+        DXUtils.shadow(hx, hy, hw, hh, s(16), 95)
+        DXUtils.roundedRect(hx, hy, hw, hh, s(16), DXUtils.color(AuthConfig.colors.window, alpha))
+        dxDrawText("Как должен быть RP-ник?", hx, hy + s(22), hx + hw, hy + s(58), tocolor(255,255,255,alpha), 1.25, "default-bold", "center", "center")
+        local text = "Правильно: John Smith, Michael Johnson\nНеправильно: john Smith, John_Smith, John123, J Smith\n\nПравила: два слова, один пробел, только латиница.\nПервая буква имени и фамилии заглавная, остальные строчные.\nМинимум 2 символа в имени и фамилии."
+        dxDrawText(text, hx + s(32), hy + s(74), hx + hw - s(32), hy + hh - s(58), DXUtils.color(AuthConfig.colors.text, alpha), 1, "default", "left", "top", true, true)
+        AuthUI.hitboxes.helpClose = { x = hx + hw - s(132), y = hy + hh - s(46), w = s(100), h = s(30) }
+        DXUtils.roundedRect(AuthUI.hitboxes.helpClose.x, AuthUI.hitboxes.helpClose.y, AuthUI.hitboxes.helpClose.w, AuthUI.hitboxes.helpClose.h, s(8), DXUtils.color(AuthConfig.colors.primary, alpha))
+        dxDrawText("Понятно", AuthUI.hitboxes.helpClose.x, AuthUI.hitboxes.helpClose.y, AuthUI.hitboxes.helpClose.x + AuthUI.hitboxes.helpClose.w, AuthUI.hitboxes.helpClose.y + AuthUI.hitboxes.helpClose.h, tocolor(255,255,255,alpha), 1, "default-bold", "center", "center")
+    end
+
     if AuthUI.notice then
         local color = AuthUI.notice.good and AuthConfig.colors.success or AuthConfig.colors.error
         DXUtils.roundedRect(panel.x + panel.pad, panel.y + panel.h - s(44), panel.w - panel.pad * 2, s(34), s(8), tocolor(color[1], color[2], color[3], 220 * alpha / 255))
@@ -234,11 +260,18 @@ function AuthUI.click(button, state, x, y)
     local boxes = AuthUI.hitboxes
     if not boxes.panel then return end
 
+    if AuthUI.helpVisible then
+        if state == "up" and inBox(x, y, boxes.helpClose) then AuthUI.helpVisible = false end
+        return
+    end
+
     if state == "down" then
         AuthUI.login:click(x, y, boxes.login.x, boxes.login.y, boxes.login.w, boxes.login.h)
         AuthUI.password:click(x, y, boxes.password.x, boxes.password.y, boxes.password.w, boxes.password.h)
         if AuthUI.mode == "register" then
             AuthUI.repeatPassword:click(x, y, boxes.repeatPassword.x, boxes.repeatPassword.y, boxes.repeatPassword.w, boxes.repeatPassword.h)
+            AuthUI.rpName:click(x, y, boxes.rpName.x, boxes.rpName.y, boxes.rpName.w, boxes.rpName.h)
+            if inBox(x, y, boxes.rpHelp) then AuthUI.helpVisible = true end
         end
         if inBox(x, y, boxes.remember) then
             AuthUI.remember = not AuthUI.remember
@@ -253,10 +286,12 @@ end
 
 function AuthUI.key(button, press)
     cancelEvent()
+    if AuthUI.helpVisible then return end
     if DXInput.active then DXInput.active:key(button, press) end
 end
 
 function AuthUI.char(char)
+    if AuthUI.helpVisible then return end
     if DXInput.active then DXInput.active:char(char) end
 end
 
