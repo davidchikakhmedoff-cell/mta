@@ -1,4 +1,5 @@
 addEventHandler("onClientResourceStart", resourceRoot, function()
+    fadeCamera(true, 0)
     setElementFrozen(localPlayer, true)
     AuthCamera.start()
     AuthUI.show()

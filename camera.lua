@@ -1,4 +1,4 @@
--- Static authorization camera: no movement, no interpolation.
+-- Static authorization camera: no movement, no interpolation and no MTA fade-in.
 AuthCamera = { active = false }
 
 local function applyStaticCamera()
@@ -8,18 +8,12 @@ end
 
 function AuthCamera.start()
     AuthCamera.active = true
-    fadeCamera(false, 0, 0, 0, 0)
+    fadeCamera(true, 0)
     applyStaticCamera()
-    setTimer(function()
-        if AuthCamera.active then
-            applyStaticCamera()
-            fadeCamera(true, AuthConfig.camera.fadeInMs, 0, 0, 0)
-        end
-    end, 250, 1)
 end
 
 function AuthCamera.stop()
     AuthCamera.active = false
     setCameraTarget(localPlayer)
-    fadeCamera(true, 1200, 0, 0, 0)
+    fadeCamera(true, 0)
 end
