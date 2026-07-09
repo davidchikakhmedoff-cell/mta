@@ -71,7 +71,8 @@ local function buildLayout()
     boxes.submit = { x = x + pad, y = cy, w = inputW, h = inputH }
 
     cy = cy + s(78)
-    boxes.switch = { x = x + pad, y = cy - s(8), w = inputW, h = s(40) }
+    boxes.switchLine = { x = x + pad, y = cy - s(8), w = inputW, h = s(40) }
+    boxes.switch = { x = x + pad, y = cy - s(8), w = 0, h = s(40) }
 
     return boxes
 end
@@ -93,15 +94,29 @@ function AuthUI.show()
     addEventHandler("onClientPaste", root, AuthUI.paste)
 end
 
-function AuthUI.hide()
-    AuthUI.targetAlpha = 0
-    showCursor(false)
-    showChat(true)
-    toggleAllControls(true)
+local function removeInputHandlers()
     removeEventHandler("onClientClick", root, AuthUI.click)
     removeEventHandler("onClientKey", root, AuthUI.key)
     removeEventHandler("onClientCharacter", root, AuthUI.char)
     removeEventHandler("onClientPaste", root, AuthUI.paste)
+end
+
+function AuthUI.hide(immediate, keepControlsDisabled)
+    AuthUI.targetAlpha = 0
+    AuthUI.submit.enabled = false
+    showCursor(false)
+    showChat(true)
+    if not keepControlsDisabled then
+        toggleAllControls(true)
+    end
+    removeInputHandlers()
+
+    if immediate then
+        AuthUI.alpha = 0
+        AuthUI.visible = false
+        AuthUI.hitboxes = {}
+        removeEventHandler("onClientRender", root, AuthUI.render)
+    end
 end
 
 function AuthUI.setNotice(text, good)
@@ -189,10 +204,19 @@ function AuthUI.render()
 
     AuthUI.submit:draw(boxes.submit.x, boxes.submit.y, boxes.submit.w, boxes.submit.h, alpha)
 
-    local lead = AuthUI.mode == "login" and "Нет аккаунта? " or "Уже есть аккаунт? "
+    local lead = AuthUI.mode == "login" and "Нет аккаунта?" or "Уже есть аккаунт?"
     local link = AuthUI.mode == "login" and "Регистрация" or "Войти"
-    dxDrawText(lead, panel.x, boxes.switch.y + s(8), panel.x + panel.w, boxes.switch.y + s(32), DXUtils.color(AuthConfig.colors.muted, alpha), 1, "default", "center", "center")
-    dxDrawText(link, panel.x + s(120), boxes.switch.y + s(8), panel.x + panel.w, boxes.switch.y + s(32), DXUtils.color(AuthConfig.colors.primary, alpha), 1, "default-bold", "center", "center")
+    local gap = s(8)
+    local leadWidth = dxGetTextWidth(lead, 1, "default")
+    local linkWidth = dxGetTextWidth(link, 1, "default-bold")
+    local totalWidth = leadWidth + gap + linkWidth
+    local lineX = panel.x + (panel.w - totalWidth) / 2
+    local lineY = boxes.switchLine.y + s(8)
+    boxes.switch = { x = lineX + leadWidth + gap, y = boxes.switchLine.y, w = linkWidth, h = boxes.switchLine.h }
+    local hoveredLink = DXUtils.inBox(boxes.switch.x, boxes.switch.y, boxes.switch.w, boxes.switch.h)
+    local linkColor = hoveredLink and tocolor(120, 215, 255, alpha) or DXUtils.color(AuthConfig.colors.primary, alpha)
+    dxDrawText(lead, lineX, lineY, lineX + leadWidth, lineY + s(24), DXUtils.color(AuthConfig.colors.muted, alpha), 1, "default", "left", "center")
+    dxDrawText(link, boxes.switch.x, lineY, boxes.switch.x + linkWidth, lineY + s(24), linkColor, 1, "default-bold", "left", "center")
 
     if AuthUI.notice then
         local color = AuthUI.notice.good and AuthConfig.colors.success or AuthConfig.colors.error

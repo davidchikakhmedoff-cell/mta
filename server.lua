@@ -1,4 +1,5 @@
 local db
+local pendingSpawns = {}
 
 local function validLogin(login)
     return type(login) == "string" and #login >= AuthConfig.input.loginMin and #login <= AuthConfig.input.loginMax and login:match("^[A-Za-z0-9_]+$") ~= nil
@@ -160,6 +161,7 @@ local function isMtaLoggedIn(player)
 end
 
 local function finishSession(player)
+    pendingSpawns[player] = nil
     savePlayerState(player)
     removeElementData(player, "auth:loggedIn")
     removeElementData(player, "auth:login")
@@ -221,7 +223,7 @@ addEventHandler("auth:login", root, function(login, password, remember)
     setElementData(client, "auth:loggedIn", true, false)
     setElementData(client, "auth:login", login, false)
     setElementData(client, "auth:playerId", row.id, false)
-    spawnAuthorizedPlayer(client, row)
+    pendingSpawns[client] = row
     triggerClientEvent(client, "auth:response", resourceRoot, true, "Добро пожаловать!", remember and login or false)
 end)
 
@@ -262,8 +264,21 @@ addEventHandler("auth:register", root, function(login, password, repeatPassword,
     setElementData(client, "auth:loggedIn", true, false)
     setElementData(client, "auth:login", login, false)
     setElementData(client, "auth:playerId", row.id, false)
-    spawnAuthorizedPlayer(client, row)
+    pendingSpawns[client] = row
     triggerClientEvent(client, "auth:response", resourceRoot, true, "Аккаунт создан!", remember and login or false)
+end)
+
+
+addEvent("auth:spawnReady", true)
+addEventHandler("auth:spawnReady", root, function()
+    if client ~= source then return end
+
+    local row = pendingSpawns[client]
+    if not row or not getPlayerId(client) or not isMtaLoggedIn(client) then return end
+
+    pendingSpawns[client] = nil
+    spawnAuthorizedPlayer(client, row)
+    triggerClientEvent(client, "auth:spawned", resourceRoot)
 end)
 
 addEventHandler("onPlayerWasted", root, function()
