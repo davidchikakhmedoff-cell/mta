@@ -1,0 +1,117 @@
+DXInput = {}
+DXInput.__index = DXInput
+DXInput.active = nil
+
+function DXInput:new(placeholder, password, maxLength)
+    return setmetatable({ placeholder = placeholder, password = password, maxLength = maxLength or 32, text = "", caret = 0, focus = 0, selectAll = false }, self)
+end
+
+function DXInput:setText(text)
+    self.text = tostring(text or ""):sub(1, self.maxLength)
+    self.caret = #self.text
+end
+
+function DXInput:getText()
+    return self.text
+end
+
+function DXInput:activate()
+    if DXInput.active then DXInput.active.selectAll = false end
+    DXInput.active = self
+    self.caret = #self.text
+end
+
+function DXInput:blur()
+    if DXInput.active == self then DXInput.active = nil end
+    self.selectAll = false
+end
+
+function DXInput:draw(x, y, w, h, alpha, icon)
+    local active = DXInput.active == self
+    self.focus = DXUtils.lerp(self.focus, active and 1 or 0, 0.14)
+
+    local panel, primary, muted, textColor = AuthConfig.colors.panel, AuthConfig.colors.primary, AuthConfig.colors.muted, AuthConfig.colors.text
+    DXUtils.roundedRect(x, y, w, h, DXUtils.s(10), tocolor(panel[1], panel[2], panel[3], alpha))
+
+    if self.focus > 0.02 then
+        dxDrawRectangle(x + DXUtils.s(14), y + h - 2, w - DXUtils.s(28), 2, tocolor(primary[1], primary[2], primary[3], alpha * self.focus))
+    end
+
+    dxDrawText(icon or "", x + DXUtils.s(16), y, x + DXUtils.s(44), y + h, tocolor(primary[1], primary[2], primary[3], alpha), 1, "default-bold", "center", "center")
+
+    local length = utf8.len(self.text) or #self.text
+    local display = self.password and string.rep("•", length) or self.text
+    local hasText = #self.text > 0
+    local shown = hasText and display or self.placeholder
+    local color = hasText and textColor or muted
+    local textX = x + DXUtils.s(52)
+    local textRight = x + w - DXUtils.s(16)
+
+    dxDrawText(shown, textX, y, textRight, y + h, tocolor(color[1], color[2], color[3], alpha), 1, "default", "left", "center", true)
+
+    if active and (getTickCount() % 1000) < 520 then
+        -- Cursor is always positioned after the real displayed text width.
+        local textWidth = hasText and dxGetTextWidth(display, 1, "default") or 0
+        local cursorX = math.min(textX + textWidth + DXUtils.s(4), textRight)
+        dxDrawRectangle(cursorX, y + DXUtils.s(16), 1, h - DXUtils.s(32), tocolor(255, 255, 255, alpha))
+    end
+end
+
+function DXInput:click(x, y, ix, iy, iw, ih)
+    if x >= ix and x <= ix + iw and y >= iy and y <= iy + ih then
+        self:activate()
+        return true
+    end
+
+    if DXInput.active == self then self:blur() end
+    return false
+end
+
+function DXInput:key(button, press)
+    if not press or DXInput.active ~= self then return false end
+
+    if getKeyState("lctrl") or getKeyState("rctrl") then
+        if button == "a" then self.selectAll = true; return true end
+        if button == "c" then setClipboard(self.text); return true end
+        if button == "v" then return true end
+    end
+
+    if button == "backspace" then
+        if self.selectAll then
+            self:setText("")
+            self.selectAll = false
+        else
+            self.text = self.text:sub(1, math.max(0, #self.text - 1))
+            self.caret = #self.text
+        end
+        return true
+    end
+
+    if button == "delete" then
+        if self.selectAll then
+            self:setText("")
+            self.selectAll = false
+        end
+        self.caret = #self.text
+        return true
+    end
+
+    if button == "arrow_l" or button == "arrow_r" then
+        self.caret = #self.text
+        return true
+    end
+
+    return false
+end
+
+function DXInput:char(char)
+    if DXInput.active ~= self or #self.text >= self.maxLength then return false end
+    if self.selectAll then
+        self.text = ""
+        self.selectAll = false
+    end
+
+    self.text = self.text .. char
+    self.caret = #self.text
+    return true
+end

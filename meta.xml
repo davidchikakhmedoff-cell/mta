@@ -1,0 +1,20 @@
+<meta>
+    <info author="OpenAI" name="Premium DX Authorization" version="1.1.0" type="script" />
+
+    <script src="config.lua" type="shared" />
+    <script src="systems/nickname/config.lua" type="shared" />
+
+    <script src="utils.lua" type="client" />
+    <script src="dx_button.lua" type="client" />
+    <script src="dx_input.lua" type="client" />
+    <script src="camera.lua" type="client" />
+    <script src="dx_login.lua" type="client" />
+    <script src="systems/nickname/client.lua" type="client" />
+    <script src="systems/tab/client.lua" type="client" />
+    <script src="client.lua" type="client" />
+
+    <script src="systems/playerid/server.lua" type="server" />
+    <script src="systems/nickname/server.lua" type="server" />
+    <script src="systems/levels/server.lua" type="server" />
+    <script src="server.lua" type="server" />
+</meta>
