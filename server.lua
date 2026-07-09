@@ -153,6 +153,40 @@ local function savePlayerState(player)
     ]], x, y, z, rz, getElementInterior(player), getElementDimension(player), getElementHealth(player), getPedArmor(player), getPlayerMoney(player), getElementModel(player), getPlayerWeapons(player), id)
 end
 
+
+local function isMtaLoggedIn(player)
+    local account = getPlayerAccount(player)
+    return account and not isGuestAccount(account)
+end
+
+local function finishSession(player)
+    savePlayerState(player)
+    removeElementData(player, "auth:loggedIn")
+    removeElementData(player, "auth:login")
+    removeElementData(player, "auth:playerId")
+
+    if isMtaLoggedIn(player) then
+        logOut(player)
+    end
+end
+
+local function loginMtaAccount(player, login, password)
+    local account = getAccount(login)
+    if not account then
+        return false, "Встроенный аккаунт MTA не найден. Обратитесь к администратору."
+    end
+
+    if isMtaLoggedIn(player) then
+        logOut(player)
+    end
+
+    if not logIn(player, account, password) then
+        return false, "Не удалось войти во встроенный аккаунт MTA. Проверьте пароль или ACL-аккаунт."
+    end
+
+    return true
+end
+
 local function respawnAtHospital(player)
     if not isElement(player) or not getPlayerId(player) then return end
 
@@ -177,6 +211,12 @@ addEventHandler("auth:login", root, function(login, password, remember)
     if not row then triggerClientEvent(client, "auth:response", resourceRoot, false, "Аккаунт не найден."); return end
     if row.password ~= passwordHash(password, row.serial) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Неверный логин или пароль."); return end
 
+    local mtaOk, mtaError = loginMtaAccount(client, login, password)
+    if not mtaOk then
+        triggerClientEvent(client, "auth:response", resourceRoot, false, mtaError)
+        return
+    end
+
     dbExec(db, "UPDATE players SET last_login = ?, serial = ? WHERE id = ?", now(), getPlayerSerial(client), row.id)
     setElementData(client, "auth:loggedIn", true, false)
     setElementData(client, "auth:login", login, false)
@@ -192,11 +232,31 @@ addEventHandler("auth:register", root, function(login, password, repeatPassword,
     if not validLogin(login) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Логин: 3-24 символа, латиница, цифры и _."); return end
     if not validPassword(password) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Пароль должен быть от 6 до 32 символов."); return end
     if password ~= repeatPassword then triggerClientEvent(client, "auth:response", resourceRoot, false, "Пароли не совпадают."); return end
-    if queryOne("SELECT id FROM players WHERE login = ? LIMIT 1", login) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Аккаунт уже существует."); return end
+    if queryOne("SELECT id FROM players WHERE login = ? LIMIT 1", login) then triggerClientEvent(client, "auth:response", resourceRoot, false, "Такой аккаунт уже существует"); return end
 
     local serial, stamp = getPlayerSerial(client), now()
     local ok = dbExec(db, "INSERT INTO players (login, password, serial, created_at, last_login, skin) VALUES (?, ?, ?, ?, ?, ?)", login, passwordHash(password, serial), serial, stamp, stamp, AuthConfig.spawn.skin)
     if not ok then triggerClientEvent(client, "auth:response", resourceRoot, false, "Не удалось создать аккаунт."); return end
+
+    local account = getAccount(login)
+    if not account then
+        account = addAccount(login, password)
+        if not account then
+            dbExec(db, "DELETE FROM players WHERE login = ?", login)
+            triggerClientEvent(client, "auth:response", resourceRoot, false, "Не удалось создать встроенный аккаунт MTA.")
+            return
+        end
+    end
+
+    if isMtaLoggedIn(client) then
+        logOut(client)
+    end
+
+    if not logIn(client, account, password) then
+        dbExec(db, "DELETE FROM players WHERE login = ?", login)
+        triggerClientEvent(client, "auth:response", resourceRoot, false, "SQLite-аккаунт создан, но вход в MTA-аккаунт не удался. Регистрация отменена.")
+        return
+    end
 
     local row = queryOne("SELECT * FROM players WHERE login = ? LIMIT 1", login)
     setElementData(client, "auth:loggedIn", true, false)
@@ -212,10 +272,18 @@ addEventHandler("onPlayerWasted", root, function()
 end)
 
 addEventHandler("onPlayerQuit", root, function()
-    savePlayerState(source)
+    finishSession(source)
 end)
 
 addEventHandler("onPlayerJoin", root, function()
     fadeCamera(source, true, 0)
     toggleAllControls(source, false, true, false)
+end)
+
+addEventHandler("onResourceStop", resourceRoot, function()
+    for _, player in ipairs(getElementsByType("player")) do
+        if getPlayerId(player) then
+            finishSession(player)
+        end
+    end
 end)
